@@ -8,7 +8,9 @@
 #include <PubSubClient.h>
 #define DEBUGG
 
-#define WATER_BOMB_PIN BUILTIN_LED 
+//#define WATER_BOMB_PIN BUILTIN_LED 
+#define WATER_BOMB_PIN D5 
+#define TIMBRE_PIN D1
 #define WATCH_DOG 13
 #define SEC_TO_MILISEC(x) ((x)*1000) 
 #define STOP_BOMB 1
@@ -142,6 +144,14 @@ void callback(char* topic, byte* payload, unsigned int length)
      mode=RUN_BOMB;
      debug_message("llego mensaje para encender la bomba",true);
   }
+  else if(!strcmp(topic,"timbre/on")){
+        debug_message("timbre on",true);
+        digitalWrite(TIMBRE_PIN,HIGH);
+  }
+  else if(!strcmp(topic,"timbre/off")){
+        debug_message("timbre off",true);
+        digitalWrite(TIMBRE_PIN,LOW);
+  }
 }
 
 void reconnect()
@@ -158,6 +168,8 @@ void reconnect()
             mqtt_client.subscribe("timer/setTime");
             mqtt_client.subscribe("timer/start");
             mqtt_client.subscribe("timer/stop");
+            mqtt_client.subscribe("timbre/on");
+            mqtt_client.subscribe("timbre/off");
             
 
 
@@ -174,15 +186,20 @@ void setup() {
   Serial.begin(9600);
   setUpWifi(ssid,pass);
   setUpMqtt();
+  pinMode(TIMBRE_PIN,OUTPUT);
+  digitalWrite(TIMBRE_PIN,LOW);
 
 }
 
 
 
 void loop() {
+  static bool onceHere=false;
   if (!mqtt_client.connected()) 
   {
       reconnect();
+      digitalWrite(TIMBRE_PIN,LOW);
+      bomb.off();
       
  }
  mqtt_client.loop(); 
@@ -193,19 +210,27 @@ switch (mode)
   {
     case STOP_BOMB:
     debug_message("se apago el motor",true);
+    mqtt_client.publish("timer/state","0");
     bomb.off();
+    onceHere=false;
     mode=NOTHING;
     break;
     case RUN_BOMB:
     if(!timer.timeOver())
     {
-      debug_message("se prendio el motor",true);
-      bomb.onn();
-      mode=NOTHING;
+      if(!onceHere){
+        onceHere=true;
+        debug_message("se prendio el motor",true);
+        mqtt_client.publish("timer/state","10");
+        bomb.onn();
+      }
+      
+      //mode=NOTHING;
     }
     else
     {
      // Serial.println("TimeOut");
+      onceHere=false;
       mode =STOP_BOMB;
     }
     break;
@@ -289,4 +314,3 @@ waterBomb::waterBomb(unsigned int pin_)
   pinMode(pin,OUTPUT);
   off();
 }
-
